@@ -11,3 +11,4 @@
 - Added richer status output and project memory in `cloud.md`
 - Added gradual request-rate ramping with automatic slowdown on failures
 - Added initial reporting layer for sales with Chile timezone conversion and Chilean number formatting
+- Deduplicated reporting sales layer using logical key `order_id + payment_id`

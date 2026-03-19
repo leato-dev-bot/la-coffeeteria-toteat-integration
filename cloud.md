@@ -38,6 +38,9 @@ Vistas disponibles:
 - `reporting.sales_payments_v`
 - `reporting.sales_daily_summary_v`
 
+Llave única lógica para ventas en reporting:
+- `order_id + payment_id`
+
 Reglas aplicadas:
 - timestamps convertidos a `America/Santiago`
 - montos con columnas formateadas en convención chilena

@@ -111,6 +111,7 @@ Reglas aplicadas en esta capa:
 - timestamps convertidos a horario de Chile (`America/Santiago`)
 - montos formateados con convención chilena para lectura humana
 - la capa raw sigue intacta como fuente técnica/auditable
+- ventas deduplicadas por llave lógica `order_id + payment_id`
 
 Construcción de la capa:
 ```bash

@@ -8,8 +8,7 @@ AS $$
   SELECT CASE
     WHEN value IS NULL THEN NULL
     WHEN decimals = 0 THEN reverse(regexp_replace(reverse(to_char(round(value)::numeric, 'FM999999999999990')), '(\d{3})(?=\d)', '\1.', 'g'))
-    ELSE
-      reverse(regexp_replace(split_part(reverse(to_char(round(value, decimals), 'FM999999999999990D' || repeat('0', decimals))), 'D', 2), '(\d{3})(?=\d)', '\1.', 'g'))
+    ELSE replace(reverse(regexp_replace(reverse(split_part(to_char(round(value, decimals), 'FM999999999999990D' || repeat('0', decimals)), '.', 1)), '(\d{3})(?=\d)', '\1.', 'g')) || ',' || lpad(split_part(to_char(round(value, decimals), 'FM999999999999990D' || repeat('0', decimals)), '.', 2), decimals, '0'), '.,', ',')
   END
 $$;
 
@@ -29,6 +28,20 @@ WITH sales_raw AS (
     jsonb_array_elements(COALESCE(response_payload->'data', '[]'::jsonb)) AS sale
   FROM toteat.raw_api_responses
   WHERE endpoint_key = 'sales'
+), deduped AS (
+  SELECT *
+  FROM (
+    SELECT
+      raw_id,
+      business_date,
+      sale,
+      row_number() OVER (
+        PARTITION BY sale->>'orderId', sale->>'paymentId'
+        ORDER BY raw_id DESC
+      ) AS rn
+    FROM sales_raw
+  ) t
+  WHERE rn = 1
 )
 SELECT
   raw_id,
@@ -73,21 +86,20 @@ SELECT
   sale->>'comment' AS sale_comment,
   sale->>'discountComment' AS discount_comment,
   sale AS raw_sale
-FROM sales_raw;
+FROM deduped;
 
 CREATE OR REPLACE VIEW reporting.sales_payments_v AS
 WITH base AS (
-  SELECT raw_id, business_date, jsonb_array_elements(COALESCE(response_payload->'data', '[]'::jsonb)) AS sale
-  FROM toteat.raw_api_responses
-  WHERE endpoint_key = 'sales'
+  SELECT raw_sale, raw_id, business_date, order_id, payment_id, closed_at_cl
+  FROM reporting.sales_orders_v
 ), forms AS (
   SELECT
     raw_id,
     business_date,
-    sale->>'orderId' AS order_id,
-    sale->>'paymentId' AS payment_id,
-    reporting.to_chile_timestamp(sale->>'dateClosed') AS closed_at_cl,
-    jsonb_array_elements(COALESCE(sale->'paymentForms', '[]'::jsonb)) AS form
+    order_id,
+    payment_id,
+    closed_at_cl,
+    jsonb_array_elements(COALESCE(raw_sale->'paymentForms', '[]'::jsonb)) AS form
   FROM base
 )
 SELECT
@@ -105,17 +117,16 @@ FROM forms;
 
 CREATE OR REPLACE VIEW reporting.sales_products_v AS
 WITH base AS (
-  SELECT raw_id, business_date, jsonb_array_elements(COALESCE(response_payload->'data', '[]'::jsonb)) AS sale
-  FROM toteat.raw_api_responses
-  WHERE endpoint_key = 'sales'
+  SELECT raw_sale, raw_id, business_date, order_id, payment_id, closed_at_cl
+  FROM reporting.sales_orders_v
 ), products AS (
   SELECT
     raw_id,
     business_date,
-    sale->>'orderId' AS order_id,
-    sale->>'paymentId' AS payment_id,
-    reporting.to_chile_timestamp(sale->>'dateClosed') AS closed_at_cl,
-    jsonb_array_elements(COALESCE(sale->'products', '[]'::jsonb)) AS product
+    order_id,
+    payment_id,
+    closed_at_cl,
+    jsonb_array_elements(COALESCE(raw_sale->'products', '[]'::jsonb)) AS product
   FROM base
 )
 SELECT
