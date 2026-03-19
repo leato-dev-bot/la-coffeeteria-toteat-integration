@@ -69,7 +69,10 @@ def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None
             raise ValueError(f"Unsupported mode: {mode}")
 
         tasks = []
+        exclude = set(exclude_endpoints or [])
         for key, defn in ENDPOINTS.items():
+            if key in exclude:
+                continue
             endpoint_mode = defn["mode"]
             if endpoint_mode == "full":
                 tasks.append((key, defn, None, None))

@@ -17,6 +17,7 @@ def parse_args() -> argparse.Namespace:
     sync.add_argument("--mode", choices=["daily", "backfill", "range"], required=True)
     sync.add_argument("--start", type=date.fromisoformat)
     sync.add_argument("--end", type=date.fromisoformat)
+    sync.add_argument("--exclude-endpoints", default="")
 
     sub.add_parser("status", help="Show current progress status")
     return parser.parse_args()
@@ -33,6 +34,11 @@ def main() -> None:
     with connect(settings) as conn:
         rows = run_sync(conn, settings, args.mode, args.start, args.end)
     print(f"Loaded {rows} raw payloads into toteat.raw_api_responses")
+
+
+if __name__ == "__main__":
+    main()
+into toteat.raw_api_responses")
 
 
 if __name__ == "__main__":
