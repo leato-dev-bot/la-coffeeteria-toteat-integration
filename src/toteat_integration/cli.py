@@ -31,14 +31,10 @@ def main() -> None:
         return
 
     settings = load_settings()
+    exclude_endpoints = [x.strip() for x in args.exclude_endpoints.split(",") if x.strip()]
     with connect(settings) as conn:
-        rows = run_sync(conn, settings, args.mode, args.start, args.end)
+        rows = run_sync(conn, settings, args.mode, args.start, args.end, exclude_endpoints=exclude_endpoints)
     print(f"Loaded {rows} raw payloads into toteat.raw_api_responses")
-
-
-if __name__ == "__main__":
-    main()
-into toteat.raw_api_responses")
 
 
 if __name__ == "__main__":
