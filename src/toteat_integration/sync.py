@@ -44,7 +44,7 @@ def _progress_payload(settings: Settings, mode: str, start_date, end_date, total
     return payload
 
 
-def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None) -> int:
+def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None, exclude_endpoints: list[str] | None = None) -> int:
     init_db(conn, settings)
     client = ToteatClient(settings)
     run_id = start_run(conn, settings, mode)
