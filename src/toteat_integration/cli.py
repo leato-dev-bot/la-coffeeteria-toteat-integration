@@ -5,7 +5,7 @@ from datetime import date
 
 from .config import load_settings
 from .db import connect
-from .monitor import load_progress
+from .monitor import build_status_summary, load_progress
 from .sync import run_sync
 
 
@@ -25,12 +25,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    settings = load_settings()
+
     if args.command == "status":
-        progress = load_progress()
-        print(progress or {})
+        with connect(settings) as conn:
+            print(build_status_summary(conn))
         return
 
-    settings = load_settings()
     exclude_endpoints = [x.strip() for x in args.exclude_endpoints.split(",") if x.strip()]
     with connect(settings) as conn:
         rows = run_sync(conn, settings, args.mode, args.start, args.end, exclude_endpoints=exclude_endpoints)

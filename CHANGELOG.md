@@ -6,3 +6,6 @@
 - Added Python CLI pipeline for backfill, daily sync, and custom ranges
 - Added raw ingestion tables and tenant registry
 - Added Chile timezone handling assumptions (`America/Santiago`)
+- Added endpoint priorities to favor sales integration
+- Added endpoint window checkpoints for resumable backfills
+- Added richer status output and project memory in `cloud.md`

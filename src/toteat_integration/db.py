@@ -58,7 +58,7 @@ def finish_run(conn, run_id: int, status: str, rows_loaded: int, error_message: 
 def store_raw(conn, settings: Settings, endpoint_key: str, request_params: dict[str, Any], business_date, payload: Any) -> int:
     payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
     request_params_json = json.dumps(request_params, sort_keys=True)
-    payload_hash = hashlib.sha256(payload_json.encode('utf-8')).hexdigest()
+    payload_hash = hashlib.sha256(payload_json.encode("utf-8")).hexdigest()
     with conn.cursor() as cur:
         cur.execute(
             """
@@ -83,7 +83,7 @@ def store_raw(conn, settings: Settings, endpoint_key: str, request_params: dict[
     return 1
 
 
-def record_failed_task(conn, settings: Settings, endpoint_key: str, request_params: dict[str, Any], business_date, error_message: str) -> None:
+def record_failed_task(conn, settings: Settings, endpoint_key: str, request_params: dict[str, Any], business_date, window_end, error_message: str) -> None:
     request_params_json = json.dumps(request_params, sort_keys=True)
     with conn.cursor() as cur:
         cur.execute(
@@ -98,4 +98,49 @@ def record_failed_task(conn, settings: Settings, endpoint_key: str, request_para
             """,
             [settings.tenant_id, endpoint_key, business_date, request_params_json, error_message],
         )
+        cur.execute(
+            """
+            INSERT INTO toteat.endpoint_checkpoints (tenant_id, endpoint_key, window_start, window_end, status, error_message)
+            VALUES (%s, %s, %s, %s, 'failed', %s)
+            ON CONFLICT (tenant_id, endpoint_key, window_start, window_end)
+            DO UPDATE SET
+              status = 'failed',
+              error_message = EXCLUDED.error_message,
+              updated_at = now()
+            """,
+            [settings.tenant_id, endpoint_key, business_date, window_end, error_message],
+        )
     conn.commit()
+
+
+def record_success_checkpoint(conn, settings: Settings, endpoint_key: str, window_start, window_end) -> None:
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO toteat.endpoint_checkpoints (tenant_id, endpoint_key, window_start, window_end, status, error_message)
+            VALUES (%s, %s, %s, %s, 'success', NULL)
+            ON CONFLICT (tenant_id, endpoint_key, window_start, window_end)
+            DO UPDATE SET
+              status = 'success',
+              error_message = NULL,
+              updated_at = now()
+            """,
+            [settings.tenant_id, endpoint_key, window_start, window_end],
+        )
+    conn.commit()
+
+
+def load_successful_windows(conn, settings: Settings) -> set[tuple[str, str | None, str | None]]:
+    windows: set[tuple[str, str | None, str | None]] = set()
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT endpoint_key, window_start, window_end
+            FROM toteat.endpoint_checkpoints
+            WHERE tenant_id = %s AND status = 'success'
+            """,
+            [settings.tenant_id],
+        )
+        for endpoint_key, window_start, window_end in cur.fetchall():
+            windows.add((endpoint_key, window_start.isoformat() if window_start else None, window_end.isoformat() if window_end else None))
+    return windows

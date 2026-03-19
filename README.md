@@ -31,6 +31,14 @@ Esta primera versión deja una capa **raw** para ingestión segura y trazable:
 - `toteat.tenants`
 - `toteat.ingestion_runs`
 - `toteat.raw_api_responses`
+- `toteat.failed_tasks`
+- `toteat.endpoint_checkpoints`
+
+## Optimización aplicada para ventas
+- prioridad explícita para `sales` y `salesbywaiter`
+- checkpoints por ventana para reanudar sin repetir trabajo ya correcto
+- exclusión selectiva de endpoints problemáticos cuando haga falta
+- estado de monitoreo más útil con conteos raw, fallos abiertos y última ventana exitosa por endpoint
 
 La idea es desacoplar:
 1. extracción desde Toteat

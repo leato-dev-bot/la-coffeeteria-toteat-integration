@@ -1,12 +1,19 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta
-import json
 from typing import Any
 
 from .client import ToteatClient
 from .config import Settings
-from .db import finish_run, init_db, record_failed_task, start_run, store_raw
+from .db import (
+    finish_run,
+    init_db,
+    load_successful_windows,
+    record_failed_task,
+    record_success_checkpoint,
+    start_run,
+    store_raw,
+)
 from .endpoints import ENDPOINTS
 from .progress import write_progress
 from .timeutils import chunk_date_range, fmt, today_in_tz
@@ -68,9 +75,11 @@ def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None
         else:
             raise ValueError(f"Unsupported mode: {mode}")
 
-        tasks = []
         exclude = set(exclude_endpoints or [])
-        for key, defn in ENDPOINTS.items():
+        successful_windows = load_successful_windows(conn, settings)
+        tasks = []
+
+        for key, defn in sorted(ENDPOINTS.items(), key=lambda item: item[1].get("priority", 999)):
             if key in exclude:
                 continue
             endpoint_mode = defn["mode"]
@@ -85,22 +94,10 @@ def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None
                 for chunk_start, chunk_end in chunk_date_range(start_date, end_date, defn.get("window_days", 15)):
                     tasks.append((key, defn, chunk_start, chunk_end))
 
-        existing = set()
-        with conn.cursor() as cur:
-            cur.execute("SELECT endpoint_key, business_date, request_params::text FROM toteat.raw_api_responses WHERE tenant_id = %s", [settings.tenant_id])
-            for endpoint_key, business_date, request_params_text in cur.fetchall():
-                existing.add((endpoint_key, business_date.isoformat() if business_date else None, request_params_text))
-
         filtered_tasks = []
         for key, defn, window_start, window_end in tasks:
-            if defn["mode"] == "full":
-                params = dict(defn.get("extra", {}))
-                signature = (key, None, json.dumps(params, sort_keys=True))
-            else:
-                params = _date_params(defn, window_start, window_end)
-                params.update(defn.get("extra", {}))
-                signature = (key, window_start.isoformat() if window_start else None, json.dumps(params, sort_keys=True))
-            if signature not in existing:
+            signature = (key, window_start.isoformat() if window_start else None, window_end.isoformat() if window_end else None)
+            if signature not in successful_windows:
                 filtered_tasks.append((key, defn, window_start, window_end))
 
         tasks = filtered_tasks
@@ -119,18 +116,21 @@ def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None
             if endpoint_mode == "full":
                 params = dict(defn.get("extra", {}))
                 business_date = None
+                checkpoint_end = None
             else:
                 params = _date_params(defn, window_start, window_end)
                 params.update(defn.get("extra", {}))
                 business_date = window_start
+                checkpoint_end = window_end
 
             try:
                 payload = client.get(defn["path"], params)
                 rows += store_raw(conn, settings, key, params, business_date, payload)
+                record_success_checkpoint(conn, settings, key, business_date, checkpoint_end)
             except Exception as task_exc:
                 failed_count += 1
                 last_error = str(task_exc)
-                record_failed_task(conn, settings, key, params, business_date, str(task_exc))
+                record_failed_task(conn, settings, key, params, business_date, checkpoint_end, str(task_exc))
             finally:
                 completed_tasks += 1
                 write_progress(_progress_payload(settings, mode, start_date, end_date, total_tasks, completed_tasks, rows, run_id, current_endpoint, current_window_start, current_window_end))

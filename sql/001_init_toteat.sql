@@ -49,9 +49,22 @@ CREATE TABLE toteat.failed_tasks (
   resolved_at timestamptz
 );
 
+CREATE TABLE toteat.endpoint_checkpoints (
+  checkpoint_id bigserial PRIMARY KEY,
+  tenant_id text NOT NULL REFERENCES toteat.tenants(tenant_id),
+  endpoint_key text NOT NULL,
+  window_start date,
+  window_end date,
+  status text NOT NULL,
+  error_message text,
+  updated_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, endpoint_key, window_start, window_end)
+);
+
 CREATE UNIQUE INDEX idx_failed_tasks_unique_open
   ON toteat.failed_tasks (tenant_id, endpoint_key, business_date, md5(request_params::text))
   WHERE resolved_at IS NULL;
 
 CREATE INDEX idx_raw_endpoint_date ON toteat.raw_api_responses(endpoint_key, business_date);
 CREATE INDEX idx_raw_tenant_fetched ON toteat.raw_api_responses(tenant_id, fetched_at DESC);
+CREATE INDEX idx_checkpoints_endpoint_status ON toteat.endpoint_checkpoints(endpoint_key, status, window_end DESC);
