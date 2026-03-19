@@ -10,3 +10,4 @@
 - Added endpoint window checkpoints for resumable backfills
 - Added richer status output and project memory in `cloud.md`
 - Added gradual request-rate ramping with automatic slowdown on failures
+- Added initial reporting layer for sales with Chile timezone conversion and Chilean number formatting

@@ -82,9 +82,10 @@ toteat-sync sync --mode range --start 2026-03-01 --end 2026-03-15
 ```
 
 ## Programación diaria sugerida
-Ejemplo con cron a las 05:15 hora Chile:
+Actualización diaria a la **01:00 AM hora de Chile** para cargar datos del día anterior:
 ```cron
-15 5 * * * cd /Users/leatoagent/Projects/la-coffeeteria-toteat-integration && . .venv/bin/activate && toteat-sync sync --mode daily >> logs/daily.log 2>&1
+CRON_TZ=America/Santiago
+0 1 * * * /Users/leatoagent/Projects/la-coffeeteria-toteat-integration/scripts/daily_update.sh
 ```
 
 ## Supervisor de backfill resistente
@@ -99,10 +100,25 @@ Este supervisor relanza pasadas, mantiene log en `logs/supervisor.log` y contin�
 - Para consultas por rango se usa hora de negocio de Chile (`America/Santiago`).
 - Los endpoints de ventas y reportes tienen ventanas máximas cortas; por eso el backfill se trocea en bloques.
 
+## Capa de reporting
+Se agregó una primera capa de reporting en schema `reporting` con foco en ventas:
+- `reporting.sales_orders_v`
+- `reporting.sales_products_v`
+- `reporting.sales_payments_v`
+- `reporting.sales_daily_summary_v`
+
+Reglas aplicadas en esta capa:
+- timestamps convertidos a horario de Chile (`America/Santiago`)
+- montos formateados con convención chilena para lectura humana
+- la capa raw sigue intacta como fuente técnica/auditable
+
+Construcción de la capa:
+```bash
+./scripts/build_reporting.sh
+```
+
 ## Siguiente capa recomendada
-Sobre `toteat.raw_api_responses`, crear vistas/tablas normalizadas para:
-- ventas
-- productos
+Sobre `toteat.raw_api_responses`, seguir ampliando reporting para:
 - recaudación
 - documentos fiscales
 - inventario
