@@ -38,8 +38,10 @@ Vistas disponibles:
 - `reporting.sales_payments_v`
 - `reporting.sales_daily_summary_v`
 
-Llave única lógica para ventas en reporting:
-- `order_id + payment_id`
+Llaves únicas lógicas para ventas en reporting:
+- órdenes: `order_id + payment_id`
+- pagos: `order_id + payment_id + payment_form_id + amount`
+- líneas de producto: `order_id + payment_id + product_line_number`
 
 Reglas aplicadas:
 - timestamps convertidos a `America/Santiago`

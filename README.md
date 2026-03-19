@@ -112,6 +112,8 @@ Reglas aplicadas en esta capa:
 - montos formateados con convención chilena para lectura humana
 - la capa raw sigue intacta como fuente técnica/auditable
 - ventas deduplicadas por llave lógica `order_id + payment_id`
+- pagos deduplicados por llave lógica `order_id + payment_id + payment_form_id + amount`
+- líneas de producto identificadas por llave lógica `order_id + payment_id + product_line_number`
 
 Construcción de la capa:
 ```bash

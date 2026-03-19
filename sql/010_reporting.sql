@@ -20,7 +20,12 @@ AS $$
   SELECT CASE WHEN value IS NULL OR btrim(value) = '' THEN NULL ELSE ((value::timestamp AT TIME ZONE 'UTC') AT TIME ZONE 'America/Santiago') END
 $$;
 
-CREATE OR REPLACE VIEW reporting.sales_orders_v AS
+DROP VIEW IF EXISTS reporting.sales_daily_summary_v CASCADE;
+DROP VIEW IF EXISTS reporting.sales_products_v CASCADE;
+DROP VIEW IF EXISTS reporting.sales_payments_v CASCADE;
+DROP VIEW IF EXISTS reporting.sales_orders_v CASCADE;
+
+CREATE VIEW reporting.sales_orders_v AS
 WITH sales_raw AS (
   SELECT
     raw_id,
@@ -88,19 +93,30 @@ SELECT
   sale AS raw_sale
 FROM deduped;
 
-CREATE OR REPLACE VIEW reporting.sales_payments_v AS
+CREATE VIEW reporting.sales_payments_v AS
 WITH base AS (
   SELECT raw_sale, raw_id, business_date, order_id, payment_id, closed_at_cl
   FROM reporting.sales_orders_v
-), forms AS (
+), expanded AS (
   SELECT
     raw_id,
     business_date,
     order_id,
     payment_id,
     closed_at_cl,
-    jsonb_array_elements(COALESCE(raw_sale->'paymentForms', '[]'::jsonb)) AS form
+    form.value AS form
   FROM base
+  CROSS JOIN LATERAL jsonb_array_elements(COALESCE(raw_sale->'paymentForms', '[]'::jsonb)) AS form(value)
+), deduped AS (
+  SELECT *
+  FROM (
+    SELECT *, row_number() OVER (
+      PARTITION BY order_id, payment_id, form->>'id', form->>'name', form->>'amount'
+      ORDER BY raw_id DESC
+    ) AS rn
+    FROM expanded
+  ) t
+  WHERE rn = 1
 )
 SELECT
   raw_id,
@@ -113,27 +129,30 @@ SELECT
   NULLIF(form->>'amount', '')::numeric AS amount,
   reporting.format_number_cl(NULLIF(form->>'amount', '')::numeric, 0) AS amount_cl,
   form->>'comment' AS comment
-FROM forms;
+FROM deduped;
 
-CREATE OR REPLACE VIEW reporting.sales_products_v AS
+CREATE VIEW reporting.sales_products_v AS
 WITH base AS (
   SELECT raw_sale, raw_id, business_date, order_id, payment_id, closed_at_cl
   FROM reporting.sales_orders_v
-), products AS (
+), expanded AS (
   SELECT
     raw_id,
     business_date,
     order_id,
     payment_id,
     closed_at_cl,
-    jsonb_array_elements(COALESCE(raw_sale->'products', '[]'::jsonb)) AS product
+    product.value AS product,
+    product.ordinality AS product_line_number
   FROM base
+  CROSS JOIN LATERAL jsonb_array_elements(COALESCE(raw_sale->'products', '[]'::jsonb)) WITH ORDINALITY AS product(value, ordinality)
 )
 SELECT
   raw_id,
   business_date,
   order_id,
   payment_id,
+  product_line_number,
   closed_at_cl,
   product->>'id' AS product_id,
   product->>'name' AS product_name,
@@ -152,9 +171,9 @@ SELECT
   reporting.format_number_cl(NULLIF(product->>'discounts', '')::numeric, 0) AS discounts_amount_cl,
   reporting.format_number_cl(NULLIF(product->>'unitCost', '')::numeric, 0) AS unit_cost_cl,
   reporting.format_number_cl(NULLIF(product->>'totalCost', '')::numeric, 0) AS total_cost_cl
-FROM products;
+FROM expanded;
 
-CREATE OR REPLACE VIEW reporting.sales_daily_summary_v AS
+CREATE VIEW reporting.sales_daily_summary_v AS
 SELECT
   sale_date_cl,
   count(DISTINCT order_id) AS orders_count,
