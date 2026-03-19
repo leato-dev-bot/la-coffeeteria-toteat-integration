@@ -57,6 +57,7 @@ def finish_run(conn, run_id: int, status: str, rows_loaded: int, error_message: 
 
 def store_raw(conn, settings: Settings, endpoint_key: str, request_params: dict[str, Any], business_date, payload: Any) -> int:
     payload_json = json.dumps(payload, ensure_ascii=False, sort_keys=True)
+    request_params_json = json.dumps(request_params, sort_keys=True)
     payload_hash = hashlib.sha256(payload_json.encode('utf-8')).hexdigest()
     with conn.cursor() as cur:
         cur.execute(
@@ -64,7 +65,37 @@ def store_raw(conn, settings: Settings, endpoint_key: str, request_params: dict[
             INSERT INTO toteat.raw_api_responses (tenant_id, endpoint_key, request_params, business_date, response_payload, payload_hash)
             VALUES (%s, %s, %s::jsonb, %s, %s::jsonb, %s)
             """,
-            [settings.tenant_id, endpoint_key, json.dumps(request_params), business_date, payload_json, payload_hash],
+            [settings.tenant_id, endpoint_key, request_params_json, business_date, payload_json, payload_hash],
+        )
+        cur.execute(
+            """
+            UPDATE toteat.failed_tasks
+            SET resolved_at = now()
+            WHERE tenant_id = %s
+              AND endpoint_key = %s
+              AND business_date IS NOT DISTINCT FROM %s
+              AND request_params::text = %s
+              AND resolved_at IS NULL
+            """,
+            [settings.tenant_id, endpoint_key, business_date, request_params_json],
         )
     conn.commit()
     return 1
+
+
+def record_failed_task(conn, settings: Settings, endpoint_key: str, request_params: dict[str, Any], business_date, error_message: str) -> None:
+    request_params_json = json.dumps(request_params, sort_keys=True)
+    with conn.cursor() as cur:
+        cur.execute(
+            """
+            INSERT INTO toteat.failed_tasks (tenant_id, endpoint_key, business_date, request_params, error_message, retry_count)
+            VALUES (%s, %s, %s, %s::jsonb, %s, 1)
+            ON CONFLICT ((tenant_id), (endpoint_key), (business_date), (md5(request_params::text))) WHERE resolved_at IS NULL
+            DO UPDATE SET
+              error_message = EXCLUDED.error_message,
+              retry_count = toteat.failed_tasks.retry_count + 1,
+              last_failed_at = now()
+            """,
+            [settings.tenant_id, endpoint_key, business_date, request_params_json, error_message],
+        )
+    conn.commit()

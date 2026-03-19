@@ -6,7 +6,7 @@ from typing import Any
 
 from .client import ToteatClient
 from .config import Settings
-from .db import finish_run, init_db, start_run, store_raw
+from .db import finish_run, init_db, record_failed_task, start_run, store_raw
 from .endpoints import ENDPOINTS
 from .progress import write_progress
 from .timeutils import chunk_date_range, fmt, today_in_tz
@@ -104,6 +104,8 @@ def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None
         total_tasks = len(tasks)
         write_progress(_progress_payload(settings, mode, start_date, end_date, total_tasks, completed_tasks, rows, run_id))
 
+        failed_count = 0
+        last_error = None
         for key, defn, window_start, window_end in tasks:
             current_endpoint = key
             current_window_start = window_start
@@ -113,19 +115,26 @@ def run_sync(conn, settings: Settings, mode: str, start_date=None, end_date=None
             endpoint_mode = defn["mode"]
             if endpoint_mode == "full":
                 params = dict(defn.get("extra", {}))
-                payload = client.get(defn["path"], params)
-                rows += store_raw(conn, settings, key, params, None, payload)
+                business_date = None
             else:
                 params = _date_params(defn, window_start, window_end)
                 params.update(defn.get("extra", {}))
+                business_date = window_start
+
+            try:
                 payload = client.get(defn["path"], params)
-                rows += store_raw(conn, settings, key, params, window_start, payload)
+                rows += store_raw(conn, settings, key, params, business_date, payload)
+            except Exception as task_exc:
+                failed_count += 1
+                last_error = str(task_exc)
+                record_failed_task(conn, settings, key, params, business_date, str(task_exc))
+            finally:
+                completed_tasks += 1
+                write_progress(_progress_payload(settings, mode, start_date, end_date, total_tasks, completed_tasks, rows, run_id, current_endpoint, current_window_start, current_window_end))
 
-            completed_tasks += 1
-            write_progress(_progress_payload(settings, mode, start_date, end_date, total_tasks, completed_tasks, rows, run_id, current_endpoint, current_window_start, current_window_end))
-
-        finish_run(conn, run_id, "success", rows)
-        write_progress(_progress_payload(settings, mode, start_date, end_date, total_tasks, completed_tasks, rows, run_id, status="success"))
+        final_status = "success" if failed_count == 0 else "partial_success"
+        finish_run(conn, run_id, final_status, rows, last_error)
+        write_progress(_progress_payload(settings, mode, start_date, end_date, total_tasks, completed_tasks, rows, run_id, status=final_status, error=last_error))
         return rows
     except Exception as exc:
         finish_run(conn, run_id, "failed", rows, str(exc))

@@ -78,6 +78,13 @@ Ejemplo con cron a las 05:15 hora Chile:
 15 5 * * * cd /Users/leatoagent/Projects/la-coffeeteria-toteat-integration && . .venv/bin/activate && toteat-sync sync --mode daily >> logs/daily.log 2>&1
 ```
 
+## Supervisor de backfill resistente
+Para completar el histórico aunque haya errores transitorios del proveedor:
+```bash
+./scripts/run_until_complete.sh
+```
+Este supervisor relanza pasadas, mantiene log en `logs/supervisor.log` y continúa hasta resolver tareas pendientes.
+
 ## Consideraciones importantes de fechas
 - Toteat agrupa varias respuestas por lógica de turno, no solo por fecha calendario.
 - Para consultas por rango se usa hora de negocio de Chile (`America/Santiago`).
