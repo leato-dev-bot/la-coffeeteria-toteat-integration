@@ -19,6 +19,9 @@ class Settings:
     db_name: str = "la_coffeeteria"
     timezone_name: str = "America/Santiago"
     locale: str = "es-CL"
+    requests_per_minute_start: int = 3
+    requests_per_minute_max: int = 5
+    requests_ramp_step_successes: int = 12
 
     @property
     def timezone(self) -> ZoneInfo:
@@ -34,4 +37,7 @@ def load_settings() -> Settings:
         xil=os.environ["TOTEAT_XIL"],
         xiu=os.environ["TOTEAT_XIU"],
         xapitoken=os.environ.get("TOTEAT_XAPITOKEN") or os.environ["TOTEAT_API_TOKEN"],
+        requests_per_minute_start=int(os.getenv("TOTEAT_REQUESTS_PER_MINUTE_START", "3")),
+        requests_per_minute_max=int(os.getenv("TOTEAT_REQUESTS_PER_MINUTE_MAX", "5")),
+        requests_ramp_step_successes=int(os.getenv("TOTEAT_REQUEST_RAMP_STEP_SUCCESSES", "12")),
     )

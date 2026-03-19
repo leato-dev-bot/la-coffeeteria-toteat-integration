@@ -9,3 +9,4 @@
 - Added endpoint priorities to favor sales integration
 - Added endpoint window checkpoints for resumable backfills
 - Added richer status output and project memory in `cloud.md`
+- Added gradual request-rate ramping with automatic slowdown on failures

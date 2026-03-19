@@ -39,6 +39,7 @@ Esta primera versión deja una capa **raw** para ingestión segura y trazable:
 - checkpoints por ventana para reanudar sin repetir trabajo ya correcto
 - exclusión selectiva de endpoints problemáticos cuando haga falta
 - estado de monitoreo más útil con conteos raw, fallos abiertos y última ventana exitosa por endpoint
+- rampa gradual de requests por minuto para encontrar un punto dulce entre velocidad y error
 
 La idea es desacoplar:
 1. extracción desde Toteat
