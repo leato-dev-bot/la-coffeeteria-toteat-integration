@@ -1,0 +1,17 @@
+# Secrets and local env
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# Build / logs
+*.log
+*.tmp
+*.bak
+
+# Data extracts
+data/
